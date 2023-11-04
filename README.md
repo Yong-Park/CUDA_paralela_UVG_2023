@@ -1,0 +1,1 @@
+# CUDA_paralela_UVG_2023
