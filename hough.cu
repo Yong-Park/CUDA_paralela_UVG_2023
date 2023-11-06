@@ -14,10 +14,8 @@
 #include <cuda.h>
 #include <string.h>
 #include "common/pgm.h"
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
-
+#include <cuda_runtime.h>
+#include "opencv2/opencv.hpp"
 
 const int degreeInc = 2;
 const int degreeBins = 180 / degreeInc;
@@ -108,12 +106,47 @@ __global__ void GPU_HoughTran (unsigned char *pic, int w, int h, int *acc, float
 
 }
 
+void DrawLines(cv::Mat &image, int *houghData, int w, int h, int threshold) {
+    float rMax = sqrt(1.0 * w * w + 1.0 * h * h) / 2;
+    float rScale = 2 * rMax / rBins;
+    int xCent = w / 2;
+    int yCent = h / 2;
+
+    for (int rIdx = 0; rIdx < rBins; rIdx++) {
+        for (int tIdx = 0; tIdx < degreeBins; tIdx++) {
+            int value = houghData[rIdx * degreeBins + tIdx];
+            if (value >= threshold) {
+                float theta = tIdx * radInc;
+                float r = rIdx * rScale - rMax;
+                double a = cos(theta);
+                double b = sin(theta);
+                int x0 = a * r + xCent;
+                int y0 = b * r + yCent;
+
+                cv::Point pt1, pt2;
+                pt1.x = cvRound(x0 + 1000 * (-b));
+                pt1.y = cvRound(y0 + 1000 * (a));
+                pt2.x = cvRound(x0 - 1000 * (-b));
+                pt2.y = cvRound(y0 - 1000 * (a));
+
+                cv::line(image, pt1, pt2, cv::Scalar(0, 0, 255), 2, CV_AA);
+            }
+        }
+    }
+}
+
+
 //*****************************************************************
 int main (int argc, char **argv)
 {
   int i;
 
   PGMImage inImg (argv[1]);
+
+  // Declaración de eventos CUDA
+  cudaEvent_t start, stop;
+  cudaEventCreate(&start);
+  cudaEventCreate(&stop);
 
   int *cpuht;
   int w = inImg.x_dim;
@@ -159,10 +192,23 @@ int main (int argc, char **argv)
   cudaMemcpy (d_in, h_in, sizeof (unsigned char) * w * h, cudaMemcpyHostToDevice);
   cudaMemset (d_hough, 0, sizeof (int) * degreeBins * rBins);
 
+  // Registra el evento de inicio
+  cudaEventRecord(start);
+
   // execution configuration uses a 1-D grid of 1-D blocks, each made of 256 threads
   //1 thread por pixel
   int blockNum = ceil (w * h / 256);
   GPU_HoughTran <<< blockNum, 256 >>> (d_in, w, h, d_hough, rMax, rScale, d_Cos, d_Sin);
+
+  // Registra el evento de finalización
+  cudaEventRecord(stop);
+
+  // Sincroniza el dispositivo para asegurar que el kernel ha terminado
+  cudaDeviceSynchronize();
+
+  // Calcula el tiempo transcurrido
+  float milliseconds = 0;
+  cudaEventElapsedTime(&milliseconds, start, stop);
 
   // get results from device
   cudaMemcpy (h_hough, d_hough, sizeof (int) * degreeBins * rBins, cudaMemcpyDeviceToHost);
@@ -175,6 +221,20 @@ int main (int argc, char **argv)
   }
   printf("Done!\n");
 
+  // Create an OpenCV image
+  cv::Mat image(h, w, CV_8UC3);
+  cv::cvtColor(image, image, cv::COLOR_BGR2RGB);
+
+  // Draw lines on the image using the Hough data and a threshold (e.g., 100)
+  int threshold = 100;
+  DrawLines(image, h_hough, w, h, threshold);
+
+  // Save the image with detected lines
+  cv::imwrite("output_image.png", image);
+
+  // Imprime el tiempo transcurrido
+  printf("Tiempo transcurrido: %f seg\n", milliseconds / 1000);
+
   // TODO clean-up
   cudaFree(d_in);
   cudaFree(d_hough);
@@ -183,6 +243,10 @@ int main (int argc, char **argv)
   free(pcCos);
   free(pcSin);
   free(h_hough);
+
+  // Destruye los eventos CUDA
+  cudaEventDestroy(start);
+  cudaEventDestroy(stop);
 
   return 0;
 }
