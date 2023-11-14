@@ -15,7 +15,7 @@
 #include <string.h>
 #include "common/pgm.h"
 #include <cuda_runtime.h>
-#include "opencv2/opencv.hpp"
+#include <opencv2/opencv.hpp>
 
 const int degreeInc = 2;
 const int degreeBins = 180 / degreeInc;
@@ -76,7 +76,9 @@ __global__ void GPU_HoughTran (unsigned char *pic, int w, int h, int *acc, float
 {
   //TODO calcular: int gloID = ?
   int gloID = blockIdx.x * blockDim.x + threadIdx.x;  //TODO
-  if (gloID > w * h) return;      // in case of extra threads in block
+  
+
+  if (gloID >= w * h) return;      // in case of extra threads in block
 
   int xCent = w / 2;
   int yCent = h / 2;
@@ -106,34 +108,59 @@ __global__ void GPU_HoughTran (unsigned char *pic, int w, int h, int *acc, float
 
 }
 
-void DrawLines(cv::Mat &image, int *houghData, int w, int h, int threshold) {
-    float rMax = sqrt(1.0 * w * w + 1.0 * h * h) / 2;
-    float rScale = 2 * rMax / rBins;
-    int xCent = w / 2;
-    int yCent = h / 2;
+// Función para dibujar las líneas detectadas en la imagen original y guardarla
+void drawAndSaveLines(const char *outputFileName, unsigned char *originalImage, int w, int h, int *h_hough, float rScale, float rMax, int maxLinesToDraw)
+{
+  cv::Mat img(h, w, CV_8UC1, originalImage);
+  cv::Mat imgColor;
+  cvtColor(img, imgColor, cv::COLOR_GRAY2BGR);
 
-    for (int rIdx = 0; rIdx < rBins; rIdx++) {
-        for (int tIdx = 0; tIdx < degreeBins; tIdx++) {
-            int value = houghData[rIdx * degreeBins + tIdx];
-            if (value >= threshold) {
-                float theta = tIdx * radInc;
-                float r = rIdx * rScale - rMax;
-                double a = cos(theta);
-                double b = sin(theta);
-                int x0 = a * r + xCent;
-                int y0 = b * r + yCent;
+  // Vector para almacenar las líneas junto con su peso
+  std::vector<std::pair<cv::Vec2f, int>> linesWithWeights;
 
-                cv::Point pt1, pt2;
-                pt1.x = cvRound(x0 + 1000 * (-b));
-                pt1.y = cvRound(y0 + 1000 * (a));
-                pt2.x = cvRound(x0 - 1000 * (-b));
-                pt2.y = cvRound(y0 - 1000 * (a));
-
-                cv::line(image, pt1, pt2, cv::Scalar(0, 0, 255), 2, CV_AA);
-            }
-        }
+  // Llenar el vector con las líneas y sus pesos
+  for (int rIdx = 0; rIdx < rBins; rIdx++)
+  {
+    for (int tIdx = 0; tIdx < degreeBins; tIdx++)
+    {
+      int weight = h_hough[rIdx * degreeBins + tIdx];
+      if (weight > 0)
+      {
+        float r = (rIdx * rScale) - rMax;
+        float theta = tIdx * radInc;
+        linesWithWeights.push_back(std::make_pair(cv::Vec2f(theta, r), weight));
+      }
     }
+  }
+
+  // Ordenar las líneas por peso en orden descendente
+  std::sort(linesWithWeights.begin(), linesWithWeights.end(),
+            [](const std::pair<cv::Vec2f, int> &a, const std::pair<cv::Vec2f, int> &b) {
+              return a.second > b.second;
+            });
+
+  // Dibujar las primeras N líneas (las más fuertes)
+  for (int i = 0; i < std::min(maxLinesToDraw, static_cast<int>(linesWithWeights.size())); ++i)
+  {
+    cv::Vec2f lineParams = linesWithWeights[i].first;
+    float theta = lineParams[0];
+    float r = lineParams[1];
+
+    double cosTheta = cos(theta);
+    double sinTheta = sin(theta);
+
+    double x0 = r * cosTheta;
+    double y0 = r * sinTheta;
+    double alpha = 1000;
+
+    cv::line(imgColor, cv::Point(cvRound(x0 + alpha * (-sinTheta)), cvRound(y0 + alpha * cosTheta)),
+             cv::Point(cvRound(x0 - alpha * (-sinTheta)), cvRound(y0 - alpha * cosTheta)), cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
+  }
+
+  // Guardar la imagen con líneas detectadas
+  cv::imwrite(outputFileName, imgColor);
 }
+
 
 
 //*****************************************************************
@@ -221,19 +248,11 @@ int main (int argc, char **argv)
   }
   printf("Done!\n");
 
-  // Create an OpenCV image
-  cv::Mat image(h, w, CV_8UC3);
-  cv::cvtColor(image, image, cv::COLOR_BGR2RGB);
-
-  // Draw lines on the image using the Hough data and a threshold (e.g., 100)
-  int threshold = 100;
-  DrawLines(image, h_hough, w, h, threshold);
-
-  // Save the image with detected lines
-  cv::imwrite("output_image.png", image);
-
   // Imprime el tiempo transcurrido
   printf("Tiempo transcurrido: %f seg\n", milliseconds / 1000);
+
+  // Draw and save lines on the original image
+  drawAndSaveLines("output_image.jpg", inImg.pixels, w, h, h_hough, rScale, rMax, 100);
 
   // TODO clean-up
   cudaFree(d_in);
