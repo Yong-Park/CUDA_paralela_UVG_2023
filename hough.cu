@@ -153,13 +153,20 @@ void drawAndSaveLines(const char *outputFileName, unsigned char *originalImage, 
     double y0 = r * sinTheta;
     double alpha = 1000;
 
+    // Imprimir r y theta antes del peso
+    printf("r: %f, theta: %f, weight: ", r, theta);
+
     cv::line(imgColor, cv::Point(cvRound(x0 + alpha * (-sinTheta)), cvRound(y0 + alpha * cosTheta)),
              cv::Point(cvRound(x0 - alpha * (-sinTheta)), cvRound(y0 - alpha * cosTheta)), cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
+
+    // Imprimir el peso
+    printf("%d\n", linesWithWeights[i].second);
   }
 
   // Guardar la imagen con líneas detectadas
   cv::imwrite(outputFileName, imgColor);
 }
+
 
 
 
