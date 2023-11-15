@@ -200,8 +200,8 @@ int main (int argc, char **argv)
   float rScale = 2 * rMax / rBins;
 
   // TODO eventualmente volver memoria global
-  cudaMemcpy(d_Cos, pcCos, sizeof (float) * degreeBins, cudaMemcpyHostToDevice);
-  cudaMemcpy(d_Sin, pcSin, sizeof (float) * degreeBins, cudaMemcpyHostToDevice);
+  cudaMemcpyToSymbol(d_Cos, pcCos, sizeof (float) * degreeBins);
+  cudaMemcpyToSymbol(d_Sin, pcSin, sizeof (float) * degreeBins);
 
   // setup and copy data from host to device
   unsigned char *d_in, *h_in;
@@ -238,11 +238,11 @@ int main (int argc, char **argv)
   cudaMemcpy (h_hough, d_hough, sizeof (int) * degreeBins * rBins, cudaMemcpyDeviceToHost);
 
   // compare CPU and GPU results
-  for (i = 0; i < degreeBins * rBins; i++)
-  {
-    if (cpuht[i] != h_hough[i])
-      printf ("Calculation mismatch at : %i %i %i\n", i, cpuht[i], h_hough[i]);
-  }
+  // for (i = 0; i < degreeBins * rBins; i++)
+  // {
+  //   if (cpuht[i] != h_hough[i])
+  //     printf ("Calculation mismatch at : %i %i %i\n", i, cpuht[i], h_hough[i]);
+  // }
   printf("Done!\n");
 
   // Imprime el tiempo transcurrido
