@@ -1,13 +1,23 @@
-/*
- ============================================================================
- Author        : G. Barlas
- Version       : 1.0
- Last modified : December 2014
- License       : Released under the GNU GPL 3.0
- Description   :
- To build use  : make
- ============================================================================
- */
+/*********************************************************************
+ * Universidad: Universidad del Valle de Guatemala
+ * Curso: Computación Paralela y Distribuida - CC3069
+ * 
+ * Archivo: hough_global_constante.cu
+ * 
+ * Autores:
+ * - Pedro Arriola (20188)
+ * - Oscar Lopez (20679)
+ * - YongBum Park (20117)
+ * 
+ * Fecha: 15/11/2023
+ * 
+ * Descripción:
+ * Este archivo contiene la implementación de la Transformada Lineal de
+ * Hough en CUDA, utilizando una combinación de memoria global y constante.
+ * Esta estrategia está enfocada en optimizar el acceso a datos frecuentemente
+ * utilizados, mejorando así el rendimiento en la detección de líneas rectas en imágenes.
+ *********************************************************************/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
