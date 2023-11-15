@@ -152,7 +152,7 @@ void drawAndSaveLines(const char *outputFileName, unsigned char *originalImage, 
     double sinTheta = sin(theta);
 
     double x0 = xCent + (r * cosTheta);
-    double y0 = yCent + (r * sinTheta) + 60;
+    double y0 = yCent + (r * sinTheta);
     double alpha = 1000;
 
     cv::line(imgColor, cv::Point(cvRound(x0 + alpha * (-sinTheta)), cvRound(y0 + alpha * cosTheta)),
