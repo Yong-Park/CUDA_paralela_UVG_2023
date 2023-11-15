@@ -197,11 +197,11 @@ int main (int argc, char **argv)
   int w = inImg.x_dim;
   int h = inImg.y_dim;
 
-  float* d_Cos;
-  float* d_Sin;
+  // float* d_Cos;
+  // float* d_Sin;
 
-  cudaMalloc ((void **) &d_Cos, sizeof (float) * degreeBins);
-  cudaMalloc ((void **) &d_Sin, sizeof (float) * degreeBins);
+  // cudaMalloc ((void **) &d_Cos, sizeof (float) * degreeBins);
+  // cudaMalloc ((void **) &d_Sin, sizeof (float) * degreeBins);
 
   // CPU calculation
   CPU_HoughTran(inImg.pixels, w, h, &cpuht);
