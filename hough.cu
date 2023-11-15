@@ -114,6 +114,8 @@ void drawAndSaveLines(const char *outputFileName, unsigned char *originalImage, 
   cv::Mat img(h, w, CV_8UC1, originalImage);
   cv::Mat imgColor;
   cvtColor(img, imgColor, cv::COLOR_GRAY2BGR);
+  int xCent = w / 2;
+  int yCent = h / 2;
 
   // Vector para almacenar las líneas junto con su peso
   std::vector<std::pair<cv::Vec2f, int>> linesWithWeights;
@@ -149,12 +151,12 @@ void drawAndSaveLines(const char *outputFileName, unsigned char *originalImage, 
     double cosTheta = cos(theta);
     double sinTheta = sin(theta);
 
-    double x0 = r * cosTheta;
-    double y0 = r * sinTheta;
+    double x0 = xCent + (r * cosTheta);
+    double y0 = yCent + (r * sinTheta) + 60;
     double alpha = 1000;
 
     cv::line(imgColor, cv::Point(cvRound(x0 + alpha * (-sinTheta)), cvRound(y0 + alpha * cosTheta)),
-             cv::Point(cvRound(x0 - alpha * (-sinTheta)), cvRound(y0 - alpha * cosTheta)), cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
+        cv::Point(cvRound(x0 - alpha * (-sinTheta)), cvRound(y0 - alpha * cosTheta)), cv::Scalar(0, 0, 255), 2, cv::LINE_AA);
   }
 
   // Guardar la imagen con líneas detectadas
@@ -252,7 +254,7 @@ int main (int argc, char **argv)
   printf("Tiempo transcurrido: %f seg\n", milliseconds / 1000);
 
   // Draw and save lines on the original image
-  drawAndSaveLines("output_image.jpg", inImg.pixels, w, h, h_hough, rScale, rMax, 100);
+  drawAndSaveLines("output_image.jpg", inImg.pixels, w, h, h_hough, rScale, rMax, 20);
 
   // TODO clean-up
   cudaFree(d_in);
