@@ -247,7 +247,7 @@ int main (int argc, char **argv)
   printf("Tiempo transcurrido: %f seg\n", milliseconds / 1000);
 
   // Draw and save lines on the original image
-  drawAndSaveLines("output_image.jpg", inImg.pixels, w, h, h_hough, rScale, rMax, 40);
+  drawAndSaveLines("output_image_global.jpg", inImg.pixels, w, h, h_hough, rScale, rMax, 40);
 
   // TODO clean-up
   cudaFree(d_in);
