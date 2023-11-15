@@ -72,45 +72,36 @@ void CPU_HoughTran (unsigned char *pic, int w, int h, int **acc)
 
 // GPU kernel. One thread per image pixel is spawned.
 // The accummulator memory needs to be allocated by the host in global memory
-__global__ void GPU_HoughTran (unsigned char *pic, int w, int h, int *acc, float rMax, float rScale, float *d_Cos, float *d_Sin)
-{
-  //TODO calcular: int gloID = ?
-  int gloID = blockIdx.x * blockDim.x + threadIdx.x;  //TODO
-  
-
-  if (gloID >= w * h) return;      // in case of extra threads in block
+__global__ void GPU_HoughTran(unsigned char *pic, int w, int h, int *acc, float rMax, float rScale) {
+  int gloID = blockIdx.x * blockDim.x + threadIdx.x;
+  if (gloID >= w * h) return; // Asegúrate de que el thread opere en el rango de píxeles válido
 
   int xCent = w / 2;
   int yCent = h / 2;
 
-  //TODO explicar bien bien esta parte. Dibujar un rectangulo a modo de imagen sirve para visualizarlo mejor
-  int xCoord = gloID % w - xCent;
-  int yCoord = yCent - gloID / w;
+  // Calcula las coordenadas del píxel con respecto al centro de la imagen
+  int xCoord = (gloID % w) - xCent;
+  int yCoord = yCent - (gloID / w); // Invierte la coordenada y debido a que el origen de la imagen está en la parte superior izquierda
 
-  //TODO eventualmente usar memoria compartida para el acumulador
-
-  if (pic[gloID] > 0)
-    {
-      for (int tIdx = 0; tIdx < degreeBins; tIdx++)
-        {
-          //TODO utilizar memoria constante para senos y cosenos
-          // float r = xCoord * __cosf(tIdx) + yCoord * __sinf(tIdx); //probar con esto para ver diferencia en tiempo
-          float r = xCoord * d_Cos[tIdx] + yCoord * d_Sin[tIdx];
-          int rIdx = (r + rMax) / rScale;
-          //debemos usar atomic, pero que race condition hay si somos un thread por pixel? explique
-          atomicAdd (acc + (rIdx * degreeBins + tIdx), 1);
-        }
+  if (pic[gloID] > 0) { // Si el pixel no es negro (más que el umbral)
+    for (int tIdx = 0; tIdx < degreeBins; tIdx++) {
+      float theta = tIdx * radInc; // Calcula el ángulo actual
+      float r = xCoord * cos(theta) + yCoord * sin(theta);
+      int rIdx = (int)((r + rMax) / rScale);
+      if (rIdx >= 0 && rIdx < rBins) { // Asegúrate de que rIdx esté dentro del rango de rBins
+        atomicAdd(&acc[rIdx * degreeBins + tIdx], 1);
+      }
     }
+  }
+}
 
   //TODO eventualmente cuando se tenga memoria compartida, copiar del local al global
   //utilizar operaciones atomicas para seguridad
   //faltara sincronizar los hilos del bloque en algunos lados
 
-}
 
 // Función para dibujar las líneas detectadas en la imagen original y guardarla
-void drawAndSaveLines(const char *outputFileName, unsigned char *originalImage, int w, int h, int *h_hough, float rScale, float rMax, int maxLinesToDraw)
-{
+void drawAndSaveLines(const char *outputFileName, unsigned char *originalImage, int w, int h, int *h_hough, float rScale, float rMax, int maxLinesToDraw) {
   cv::Mat img(h, w, CV_8UC1, originalImage);
   cv::Mat imgColor;
   cvtColor(img, imgColor, cv::COLOR_GRAY2BGR);
@@ -121,14 +112,11 @@ void drawAndSaveLines(const char *outputFileName, unsigned char *originalImage, 
   std::vector<std::pair<cv::Vec2f, int>> linesWithWeights;
 
   // Llenar el vector con las líneas y sus pesos
-  for (int rIdx = 0; rIdx < rBins; rIdx++)
-  {
-    for (int tIdx = 0; tIdx < degreeBins; tIdx++)
-    {
+  for (int rIdx = 0; rIdx < rBins; rIdx++) {
+    for (int tIdx = 0; tIdx < degreeBins; tIdx++) {
       int weight = h_hough[rIdx * degreeBins + tIdx];
-      if (weight > 0)
-      {
-        float r = (rIdx * rScale) - rMax;
+      if (weight > 0) {
+        float r = (rIdx * rScale) - (rBins * rScale) / 2;
         float theta = tIdx * radInc;
         linesWithWeights.push_back(std::make_pair(cv::Vec2f(theta, r), weight));
       }
@@ -142,8 +130,7 @@ void drawAndSaveLines(const char *outputFileName, unsigned char *originalImage, 
             });
 
   // Dibujar las primeras N líneas (las más fuertes)
-  for (int i = 0; i < std::min(maxLinesToDraw, static_cast<int>(linesWithWeights.size())); ++i)
-  {
+  for (int i = 0; i < std::min(maxLinesToDraw, static_cast<int>(linesWithWeights.size())); ++i) {
     cv::Vec2f lineParams = linesWithWeights[i].first;
     float theta = lineParams[0];
     float r = lineParams[1];
@@ -151,18 +138,24 @@ void drawAndSaveLines(const char *outputFileName, unsigned char *originalImage, 
     double cosTheta = cos(theta);
     double sinTheta = sin(theta);
 
-    double x0 = xCent + (r * cosTheta);
-    double y0 = yCent + (r * sinTheta);
-    double alpha = 1000;
+    double x0 = xCent - (r * cosTheta);
+    double y0 = yCent + (r * sinTheta);  // Note el cambio de signo aquí
+    double alpha = sqrt(w * w + h * h);  // Asegura que alpha sea suficientemente grande
 
-    cv::line(imgColor, cv::Point(cvRound(x0 + alpha * (-sinTheta)), cvRound(y0 + alpha * cosTheta)),
-        cv::Point(cvRound(x0 - alpha * (-sinTheta)), cvRound(y0 - alpha * cosTheta)), cv::Scalar(0, 0, 255), 2, cv::LINE_AA);
+    // Puntos de inicio y final para la línea extendida
+    cv::Point pt1, pt2;
+    pt1.x = cvRound(x0 + alpha * (-sinTheta));
+    pt1.y = cvRound(y0 + alpha * cosTheta);
+    pt2.x = cvRound(x0 - alpha * (-sinTheta));
+    pt2.y = cvRound(y0 - alpha * cosTheta);
+
+    // Dibuja la línea en la imagen
+    cv::line(imgColor, pt1, pt2, cv::Scalar(0, 0, 255), 2, cv::LINE_AA);
   }
 
   // Guardar la imagen con líneas detectadas
   cv::imwrite(outputFileName, imgColor);
 }
-
 
 
 //*****************************************************************
@@ -227,7 +220,7 @@ int main (int argc, char **argv)
   // execution configuration uses a 1-D grid of 1-D blocks, each made of 256 threads
   //1 thread por pixel
   int blockNum = ceil (w * h / 256);
-  GPU_HoughTran <<< blockNum, 256 >>> (d_in, w, h, d_hough, rMax, rScale, d_Cos, d_Sin);
+  GPU_HoughTran <<< blockNum, 256 >>> (d_in, w, h, d_hough, rMax, rScale);
 
   // Registra el evento de finalización
   cudaEventRecord(stop);
@@ -254,7 +247,7 @@ int main (int argc, char **argv)
   printf("Tiempo transcurrido: %f seg\n", milliseconds / 1000);
 
   // Draw and save lines on the original image
-  drawAndSaveLines("output_image.jpg", inImg.pixels, w, h, h_hough, rScale, rMax, 20);
+  drawAndSaveLines("output_image.jpg", inImg.pixels, w, h, h_hough, rScale, rMax, 40);
 
   // TODO clean-up
   cudaFree(d_in);
