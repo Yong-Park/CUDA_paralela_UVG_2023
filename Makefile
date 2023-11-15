@@ -1,5 +1,11 @@
 all: pgm.o	hough
 
+hough_global:	hough_global.cu pgm.o
+	nvcc hough_global.cu pgm.o -o hough_global -lopencv_core -lopencv_highgui -lopencv_imgcodecs -lopencv_imgproc -I/usr/include/opencv4
+
+hough_globalConst:	hough_globalConst.cu pgm.o
+	nvcc hough_globalConst.cu pgm.o -o hough_globalConst -lopencv_core -lopencv_highgui -lopencv_imgcodecs -lopencv_imgproc -I/usr/include/opencv4
+
 hough_globalConstComp:	hough_globalConstComp.cu pgm.o
 	nvcc hough_globalConstComp.cu pgm.o -o hough_globalConstComp -lopencv_core -lopencv_highgui -lopencv_imgcodecs -lopencv_imgproc -I/usr/include/opencv4
 
